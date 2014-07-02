@@ -1,12 +1,19 @@
 package com.brentandjody.slowdown;
 
 import android.app.Activity;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.ServiceConnection;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.view.Menu;
 import android.view.MenuItem;
 
 
 public class MainActivity extends Activity {
+
+    private boolean mBound = false;
+    private AudioListenerService mService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -14,6 +21,24 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
     }
 
+    @Override
+    protected void onStart() {
+        super.onStart();
+        bindService(AudioListenerService.makeIntent(this), mConnection, Context.BIND_AUTO_CREATE);
+        if (mBound) {
+            mService.startRecording();
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (mBound) {
+            mService.stopRecording();
+            unbindService(mConnection);
+            mBound=false;
+        }
+    }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -33,4 +58,21 @@ public class MainActivity extends Activity {
         }
         return super.onOptionsItemSelected(item);
     }
+
+    private ServiceConnection mConnection = new ServiceConnection() {
+
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+            AudioListenerService.LocalBinder binder = (AudioListenerService.LocalBinder) iBinder;
+            mService = binder.getService();
+            mBound = true;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            mBound = false;
+        }
+    };
+
+
 }
