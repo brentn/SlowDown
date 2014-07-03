@@ -3,7 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/SlowDown.iml" filepath="$PROJECT_DIR$/SlowDown.iml" />
-      <module fileurl="file://$PROJECT_DIR$/SlowDown/SlowDown-SlowDown.iml" filepath="$PROJECT_DIR$/SlowDown/SlowDown-SlowDown.iml" />
+      <module fileurl="file://$PROJECT_DIR$/SpeakSlow.iml" filepath="$PROJECT_DIR$/SpeakSlow.iml" />
     </modules>
   </component>
 </project>
