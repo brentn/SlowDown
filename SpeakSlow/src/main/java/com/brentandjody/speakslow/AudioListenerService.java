@@ -32,6 +32,7 @@ public class AudioListenerService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
+        Log.d(TAG, "Setting up listener");
         audioRecorder = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, CHANNEL_IN, ENCODING, BUFFER_SIZE);
         stream = new LinkedBlockingQueue();
         startRecording();
@@ -41,14 +42,17 @@ public class AudioListenerService extends Service {
     @Override
     public boolean onUnbind(Intent intent) {
         boolean result = super.onUnbind(intent);
+        Log.d(TAG, "Shutting down listener");
         stopRecording();
         stream.clear();
+        stream=null;
+        audioRecorder.release();
+        audioRecorder=null;
         return result;
     }
 
     public static Intent makeIntent(Context context) {
-        Intent intent = new Intent(context, AudioListenerService.class);
-        return intent;
+        return new Intent(context, AudioListenerService.class);
     }
 
     public void startRecording() {
@@ -65,20 +69,19 @@ public class AudioListenerService extends Service {
                         audioRecorder.read(buffer, 0, buffer.length);
                         stream.put(buffer);
                     }
+                    Log.d(TAG, "Recording thread is ending");
                 } catch(InterruptedException e) {
                     Log.i(TAG, "...Recording interrupted");
                 }
-                audioRecorder.stop();
-                audioRecorder.release();
             }
         };
         background.start();
     }
 
     public void stopRecording() {
-        if (mRecord) {
-            Log.d(TAG, "...ending recording");
-            mRecord = false;
+        Log.d(TAG, "...stopping recording");
+        mRecord = false;
+        if (audioRecorder != null) {
             audioRecorder.stop();
         }
     }

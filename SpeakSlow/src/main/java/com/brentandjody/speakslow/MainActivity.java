@@ -5,7 +5,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.ServiceConnection;
 import android.media.AudioManager;
-import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -18,6 +17,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class MainActivity extends Activity {
 
+    private static final int SLOWDOWN = 2;
+    private static final float SILENCE_THRESHOLD = 150f;
+
     private final String TAG = this.getClass().getSimpleName();
     private boolean mBound = false;
     private boolean mPlayback = false;
@@ -29,12 +31,12 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        bindService(AudioListenerService.makeIntent(this), mConnection, Context.BIND_AUTO_CREATE);
     }
 
     @Override
     protected void onStart() {
         super.onStart();
-        bindService(AudioListenerService.makeIntent(this), mConnection, Context.BIND_AUTO_CREATE);
     }
 
     @Override
@@ -43,20 +45,29 @@ public class MainActivity extends Activity {
         if (mBound) {
             mAudioStream = null;
             mService.stopRecording();
-            unbindService(mConnection);
-            mBound=false;
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mAudioStream = null;
+        if (mService!=null) mService.stopRecording();
+        if (mConnection!=null) unbindService(mConnection);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        if (!mPlayback)
+            startPlayback();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        stopPlayback();
+        if (mPlayback)
+            stopPlayback();
     }
 
     @Override
@@ -79,12 +90,11 @@ public class MainActivity extends Activity {
     }
 
     private void startPlayback() {
-        final int SLOWDOWN = 3;
         if (mBound) {
             Log.d(TAG, "Starting playback...");
             mPlayback = true;
-            mTrack = new AudioTrack(AudioManager.STREAM_VOICE_CALL, mService.SAMPLE_RATE,
-                    mService.CHANNEL_OUT, mService.ENCODING, mService.BUFFER_SIZE, AudioTrack.MODE_STREAM);
+            mTrack = new AudioTrack(AudioManager.STREAM_VOICE_CALL, AudioListenerService.SAMPLE_RATE,
+                    AudioListenerService.CHANNEL_OUT, AudioListenerService.ENCODING, AudioListenerService.BUFFER_SIZE, AudioTrack.MODE_STREAM);
             mTrack.play();
             Thread background = new Thread() {
                 @Override
@@ -96,21 +106,24 @@ public class MainActivity extends Activity {
                                 if (!mAudioStream.isEmpty()) {
                                     i++;
                                     byte[] buffer = (byte[]) mAudioStream.take();
-                                    mTrack.write(buffer, 0, buffer.length);
-                                    if (i >= SLOWDOWN) {
+                                    if (soundLevel(buffer) > SILENCE_THRESHOLD) {
                                         mTrack.write(buffer, 0, buffer.length);
-                                        i = 0;
+                                        if (i >= SLOWDOWN) {
+                                            mTrack.write(buffer, 0, buffer.length);
+                                            i = 0;
+                                        }
                                     }
                                 }
                             }
+                            Log.d(TAG, "Playback thread is ending");
+                            mTrack.stop();
+                            mTrack.release();
                         } catch (InterruptedException e) {
                             Log.i(TAG, "...playback interrupted");
                         }
                     } else {
                         Log.e(TAG, "No audio stream");
                     }
-                    mTrack.stop();
-                    mTrack.release();
                 }
             };
             background.start();
@@ -122,6 +135,16 @@ public class MainActivity extends Activity {
     private void stopPlayback() {
         Log.d(TAG, "...stopping playback");
         mPlayback=false;
+    }
+
+    private float soundLevel(byte[] buffer) {
+        float total = 0.0f;
+        short sample;
+        for (int i=0; i < AudioListenerService.BUFFER_SIZE; i+=2) {
+            sample = (short)((buffer[i]) | buffer[i+1] << 8);
+            total += Math.abs(sample) / (AudioListenerService.BUFFER_SIZE/2);
+        }
+        return total;
     }
 
     private ServiceConnection mConnection = new ServiceConnection() {
@@ -142,6 +165,8 @@ public class MainActivity extends Activity {
             mBound = false;
         }
     };
+
+
 
 
 }
